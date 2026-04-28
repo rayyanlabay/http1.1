@@ -14,6 +14,8 @@
 #define PATH_STRING_START 1
 #define PROTOCOL_STRING_START 2
 
+#define KB 1024
+
 http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
 {
     // current_parse_ptr is where the parser at
@@ -21,14 +23,15 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
     // next_ptr will point at the next part
     char *next_ptr = NULL;
 
-    size_t size = 0;
+    // fix later to size_t
+    char size = 0;
 
     // memory pool will look like this: |size|data...|size|data.. etc
     pool_t *mem_pool_ptr = PoolCreate();
 
     // i represents the start line portions (GET / HTTP/1.1)
     size_t i = 0;
-    while (!memcmp(current_parse_ptr, "\r\n", 2))
+    while (0 != memcmp(current_parse_ptr, "\r\n", 2))
     {
         // find delimiter ' ' - space
         // next_ptr points to the delimeter address
@@ -36,11 +39,11 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
         size = next_ptr - current_parse_ptr;
 
         // assume for simplicity, size can be represented using one char
-        PoolWrite(mem_pool_ptr, size, 1);
+        PoolWrite(mem_pool_ptr, &size, 1);
 
         // point the string after the size
         http_msg->s[i] = PoolContentEnd(mem_pool_ptr) + 1;
-        PoolWrite(mem_pool_ptr, http_msg->s[i], size);
+        PoolWrite(mem_pool_ptr, http_msg->s[i], (size_t)size);
 
         // prepare for next string
         ++i;
@@ -54,7 +57,7 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
     }
 
     /* parse headers */
-    char *next_ptr = NULL;
+    next_ptr = NULL;
     // +2 to skip <cr-lf>
     char *headers_start = current_parse_ptr + 2;
 
@@ -63,8 +66,9 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
     while (!memcmp(current_parse_ptr, "\r\n\r\n", 4) && (next_ptr = strchr(current_parse_ptr, ':')) != NULL)
     {
         // upcoming key string size, e.g. "content-lenght" is 14
-        size_t key_size = (next_ptr - current_parse_ptr);
-        PoolWrite(mem_pool_ptr, key_size, 1);
+        // fix later from char to size_t
+        char key_size = (next_ptr - current_parse_ptr);
+        PoolWrite(mem_pool_ptr, &key_size, 1);
 
         if (0 == memcmp(current_parse_ptr, "content-length", 14))
         {
@@ -73,7 +77,7 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
         }
 
         // now write the key string
-        PoolWrite(mem_pool_ptr, current_parse_ptr, key_size);
+        PoolWrite(mem_pool_ptr, current_parse_ptr, (size_t)key_size);
 
         current_parse_ptr = next_ptr + 1;
         // while is for checking if it is not '\r' and it is "\r\n"
@@ -83,15 +87,16 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
         }
 
         // copy contents of buffer into area of val in the memory_pool
-        size_t val_size = (next_ptr - current_parse_ptr);
-        PoolWrite(mem_pool_ptr, val_size, 1);
+        // fix later size issues from char to size_t
+        char val_size = (next_ptr - current_parse_ptr);
+        PoolWrite(mem_pool_ptr, &val_size, 1);
 
         if (now_content_length_header)
         {
             content_length = PoolContentEnd(mem_pool_ptr);
         }
 
-        PoolWrite(mem_pool_ptr, current_parse_ptr, val_size);
+        PoolWrite(mem_pool_ptr, current_parse_ptr, (size_t)val_size);
     }
 
     // if there were no headers at all not valid in HTTP/1.1
@@ -103,21 +108,21 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
     // parse the body
     // Transfer-Encoding: chunked do later
     // currently support content-length header only
-    size_t count = 0;
     size_t len = StringToSizeT(content_length);
 
-    PoolWrite(mem_pool_ptr, len, sizeof(size_t));
+    PoolWrite(mem_pool_ptr, &content_length, sizeof(size_t));
     PoolWrite(mem_pool_ptr, current_parse_ptr, len);
+    return HTTP_OK;
 }
 
-int main()
+int main(int argc, char **argv)
 {
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-
+    int port = atoi(argv[1]);
     struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
+    server_addr.sin_port = htons(port);
 
     // bind server file descriptor to socket
     bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
@@ -130,21 +135,25 @@ int main()
     struct sockaddr_in client_addr = {0};
     socklen_t client_len = sizeof(client_addr);
 
-    // passed message
-    char buffer[1024] = {0};
-
+    char buffer[4 * KB] = {0};
+    ssize_t bytes = 0;
     while (SERVER_RUNNING)
     {
 
         connection_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
 
-        int bytes = read(connection_fd, buffer, sizeof(buffer));
+        while ((bytes = read(connection_fd, buffer, sizeof(buffer))) > 0)
+        {
+            http_request_t http_msg = {0};
+            ParseHttp(buffer, &http_msg);
 
-        http_request_t http_msg = {0};
-        ParseHttp(&buffer, &http_msg);
+            // actions on http_msg
+        }
+
+        memset(buffer, 0, sizeof(buffer));
 
         // printf http_msg
-        printf("Received: %.*s\n", bytes, buffer);
+        // printf("Received: %.*s\n", bytes, buffer);
 
         char *body = "Hello from server\n";
 
@@ -159,8 +168,13 @@ int main()
             "%s",
             strlen(body),
             body);
-        write(connection_fd, buffer, len);
-        memset(&buffer, 1024, 0);
+
+        if (-1 == write(connection_fd, buffer, len))
+        {
+            return 0;
+        }
+
+        memset(&buffer, 0, sizeof(buffer));
         close(connection_fd);
     }
 

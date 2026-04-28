@@ -1,3 +1,5 @@
+#include <string.h>
+#include <stdlib.h>
 #include "pool_service.h"
 
 #define POOL_CANARY 0xDEADBEEF
@@ -5,7 +7,7 @@
 #define KB 1024
 #define POOL_SIZE 8 * KB
 
-typedef struct pool
+struct pool
 {
     size_t size;
     char *head;
@@ -13,7 +15,7 @@ typedef struct pool
     char *end;
 
     struct pool *next;
-} pool_t;
+};
 
 pool_t *PoolCreate()
 {

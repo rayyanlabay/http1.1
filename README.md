@@ -3,6 +3,47 @@
 
 ### this is a refresher project, exploring HTTP servers <br>
 
+starting from a simple HTTP/1.1 server until i expand into HTTP/3 over QUIC
+HTTP/1.1 Message Structure:
+
+<table>
+  <!-- First line -->
+  <tr>
+    <td>Method</td>
+    <td>Path</td>
+    <td>Protocol</td>
+    <td>CRLF</td>
+  </tr>
+
+  <!-- Headers -->
+  <tr>
+    <td colspan="3">Header1</td>
+    <td>CRLF</td>
+  </tr>
+  <tr>
+    <td colspan="3">Header2</td>
+    <td>CRLF</td>
+  </tr>
+  <tr>
+    <td colspan="3">Header3</td>
+    <td>CRLF</td>
+  </tr>
+  <tr>
+    <td colspan="3">Header4</td>
+    <td>CRLF</td>
+  </tr>
+  <tr>
+    <td colspan="3">Header5</td>
+    <td>CRLF</td>
+  </tr>
+
+  <!-- Body -->
+  <tr>
+    <td colspan="3">Body</td>
+    <td>CRLF</td>
+  </tr>
+</table>
+
 STATUS: 
 
 <table>

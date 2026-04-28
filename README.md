@@ -4,7 +4,7 @@
 ### this is a refresher project, exploring HTTP servers <br>
 
 starting from a simple HTTP/1.1 server until i expand into HTTP/3 over QUIC
-HTTP/1.1 Message Structure:
+example of an HTTP/1.1 Message Structure:
 
 <table>
   <!-- First line -->
@@ -17,22 +17,17 @@ HTTP/1.1 Message Structure:
 
   <!-- Headers -->
   <tr>
-    <td colspan="3">Header1</td>
+    <td colspan="3">Content-Length</td>
     <td>CRLF</td>
   </tr>
   <tr>
-    <td colspan="3">Header2</td>
+    <td colspan="3">Connection</td>
     <td>CRLF</td>
   </tr>
   <tr>
-    <td colspan="3">Header3</td>
+    <td colspan="3"> ... </td>
     <td>CRLF</td>
   </tr>
-  <tr>
-    <td colspan="3">Header4</td>
-    <td>CRLF</td>
-  </tr>
-
 
   <!-- Body -->
   <tr>

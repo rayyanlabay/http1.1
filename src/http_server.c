@@ -2,6 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <errno.h>
+#include <limits.h>
+#include <stdint.h>
+
 #include <arpa/inet.h>
 #include "../include/http_server.h"
 
@@ -11,6 +16,27 @@
 #define METHOD_STRING_START 0
 #define PATH_STRING_START 1
 #define PROTOCOL_STRING_START 2
+
+static size_t StringToSizeT(const char *str)
+{
+    if (!str)
+        return 0;
+
+    errno = 0;
+    char *end = NULL;
+
+    unsigned long long val = strtoull(str, &end, 10);
+
+    // no digits parsed
+    if (end == str)
+        return 0;
+
+    // overflow or invalid
+    if (errno == ERANGE || val > SIZE_MAX)
+        return 0;
+
+    return (size_t)val;
+}
 
 http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
 {
@@ -101,17 +127,11 @@ http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
     // parse the body
     // Transfer-Encoding: chunked do later
     // currently support content-length header only
-    size_t count;
+    size_t count = 0;
     size_t len = StringToSizeT(content_length);
-    while (count < content_length)
-    {
-    }
 
-    char *end_of_body = strstr(current_parse_ptr, "\r\n");
-    size_t body_size = end_of_body - current_parse_ptr;
-
-    http_msg->body = calloc(0, body_size + 1);
-    strcnpy(http_msg->body, current_parse_ptr, body_size);
+    PoolWrite(mem_pool_ptr, len, sizeof(size_t));
+    PoolWrite(mem_pool_ptr, current_parse_ptr, len);
 }
 
 int main()

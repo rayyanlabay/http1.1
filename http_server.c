@@ -28,9 +28,9 @@ void ParseHttp(char *buffer, http_request_t *http_msg)
         current_parse_point = next_point + 1;
     }
 
-    strncpy(http_msg->method, buffer, start_line[PATH_PTR] - buffer);
-    strncpy(http_msg->path, start_line[PATH_PTR] + 1, start_line[PROTOCOL_PTR] - start_line[PATH_PTR]);
-    strncpy(http_msg->protocol, start_line[PROTOCOL_PTR] + 1, current_parse_point - start_line[PATH_PTR]);
+    memcpy(http_msg->method, buffer, start_line[PATH_PTR] - buffer);
+    memcpy(http_msg->path, start_line[PATH_PTR] + 1, start_line[PROTOCOL_PTR] - start_line[PATH_PTR]);
+    memcpy(http_msg->protocol, start_line[PROTOCOL_PTR] + 1, current_parse_point - start_line[PATH_PTR]);
 
     /* parse headers */
     char *next_point = NULL;
@@ -45,7 +45,7 @@ void ParseHttp(char *buffer, http_request_t *http_msg)
         size_t key_index = (current_parse_point - headers_start);
 
         h_ent.key = mem_pool + key_index;
-        strncpy(h_ent.key, current_parse_point, key_size);
+        memcpy(h_ent.key, current_parse_point, key_size);
 
         // advance in 2 chars, because first one is null terminator of the key
         size_t val_index = key_size + 2;
@@ -59,7 +59,7 @@ void ParseHttp(char *buffer, http_request_t *http_msg)
 
         // copy contents of buffer into area of val in the memory_pool
         size_t val_size = (next_point - current_parse_point);
-        strncpy(h_ent.val, current_parse_point, val_size);
+        memcpy(h_ent.val, current_parse_point, val_size);
 
         // update http_msg
         http_msg->headers.entries_start = mem_pool;

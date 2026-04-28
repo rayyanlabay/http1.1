@@ -32,7 +32,6 @@ example of an HTTP/1.1 Message Structure:
   <!-- Body -->
   <tr>
     <td colspan="3">Body</td>
-    <td>CRLF</td>
   </tr>
 </table>
 

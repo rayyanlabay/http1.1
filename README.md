@@ -32,10 +32,7 @@ HTTP/1.1 Message Structure:
     <td colspan="3">Header4</td>
     <td>CRLF</td>
   </tr>
-  <tr>
-    <td colspan="3">Header5</td>
-    <td>CRLF</td>
-  </tr>
+
 
   <!-- Body -->
   <tr>

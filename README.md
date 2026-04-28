@@ -3,7 +3,7 @@
 
 ### this is a refresher project, exploring HTTP servers <br>
 
-starting from a simple HTTP/1.1 server until i expand into HTTP/3 over QUIC
+starting from a simple HTTP/1.1 server until i expand into HTTP/3 over QUIC<br>
 example of an HTTP/1.1 Message Structure:
 
 <table>

@@ -46,10 +46,18 @@ STATUS:
     <td>fast message allocation using memory pool</td>
     <td><img src="https://img.shields.io/badge/70%25-green"></td>
   </tr>
+
+  <tr>
+    <td> transition to C++ </td>
+    <td><img src="https://img.shields.io/badge/0%25-red"></td>
+  </tr>
+ 
+  
   <tr>
     <td>multithreading</td>
     <td><img src="https://img.shields.io/badge/0%25-red"></td>
   </tr>
+  
   <tr>
     <td>QUIC</td>
     <td><img src="https://img.shields.io/badge/0%25-red"></td>
@@ -58,5 +66,6 @@ STATUS:
     <td>HTTP/3 support</td>
     <td><img src="https://img.shields.io/badge/0%25-red"></td>
   </tr>
+  
 </table>
 

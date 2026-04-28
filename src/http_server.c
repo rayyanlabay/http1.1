@@ -2,13 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <errno.h>
-#include <limits.h>
-#include <stdint.h>
-
 #include <arpa/inet.h>
-#include "../include/http_server.h"
+
+#include "http_server.h"
+#include "utils.h"
 
 #define PORT 8080
 #define SERVER_RUNNING 1
@@ -16,27 +13,6 @@
 #define METHOD_STRING_START 0
 #define PATH_STRING_START 1
 #define PROTOCOL_STRING_START 2
-
-static size_t StringToSizeT(const char *str)
-{
-    if (!str)
-        return 0;
-
-    errno = 0;
-    char *end = NULL;
-
-    unsigned long long val = strtoull(str, &end, 10);
-
-    // no digits parsed
-    if (end == str)
-        return 0;
-
-    // overflow or invalid
-    if (errno == ERANGE || val > SIZE_MAX)
-        return 0;
-
-    return (size_t)val;
-}
 
 http_status_t ParseHttp(char *buffer, http_request_t *http_msg)
 {

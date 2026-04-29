@@ -27,14 +27,6 @@ typedef struct
     char *val;
 } http_header_entry_t;
 
-typedef struct
-{
-    http_header_entry_t *entries_start;
-    http_header_entry_t *entries_end;
-
-    int count;
-} header_list_t;
-
 #define METHOD 0
 #define PATH 1
 #define PROTOCOL 2
@@ -43,8 +35,8 @@ typedef struct
 {
     char *s[3];
 
-    header_list_t headers;
-
+    http_header_entry_t *headers_start;
+    http_header_entry_t *headers_end;
     // later change to grab from memory pool
     char *body;
 } http_request_t;

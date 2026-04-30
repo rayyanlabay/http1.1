@@ -74,51 +74,45 @@ int ParseFirstLine(char *str, http_request_t *http_msg, size_t crlf_index)
 
 int ParseHeaders(char *str, http_request_t *http_msg, size_t crlf_index, size_t header_i)
 {
-    // get key
+
     char *s1 = strchr(str, ':');
-    // the format is not ok
+
     if (!s1)
     {
         return HTTP_BAD_REQUEST;
     }
-    // there was key
-    if (s1 - str > 0)
+
+    size_t key_size = s1 - str;
+
+    if (key_size > 0)
     {
-        size_t key_size = s1 - str;
-
-        // later check whether key is valid format
-        // size_t i = 0;
-        // while (i < key_size)
-        // {
-        //     // if key contains space
-        //     if (!(0 != isspace(s1[i])))
-        //     {
-        //         return HTTP_BAD_REQUEST;
-        //     }
-        // }
-
         http_msg->headers[header_i].key->size = key_size;
         http_msg->headers[header_i].key->data = str;
     }
-    // there is no value
-    if (0 == str + crlf_index - s1 - 1)
+    else
     {
         return HTTP_BAD_REQUEST;
     }
-    // there is some value, is it valid ?
+
+    if (0 == str + crlf_index - (s1 + 1))
+    {
+        return HTTP_BAD_REQUEST;
+    }
 
     ++s1;
     while (s1 < str + crlf_index && 0 != isspace(*(s1++)))
         ;
-    // value was all spaces
-    if (s1 == str + crlf_index)
+
+    char *val_end = str + crlf_index - 1;
+
+    while (val_end > s1 && 0 != isspace(*val_end--))
+        ;
+
+    if (val_end < s1)
     {
         return HTTP_BAD_REQUEST;
     }
-    char *val_end = str + crlf_index - 1;
-    while (val_end > s1 && 0 != isspace(*val_end--))
-        ;
-    // trim left and right done
+
     char *s2 = s1;
     size_t val_size = val_end - s2 + 1;
 
@@ -146,7 +140,7 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
     while (n_bytes = (read(connection_fd, read_point, buf_size) > 0))
     {
         total_read = read_point + n_bytes - parse_portion;
-        if (0 == FoundCRLF(parse_portion, total_read - crlf_index - 1, &crlf_index))
+        if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
         {
             buf_size -= n_bytes;
             read_point += n_bytes;
@@ -169,11 +163,12 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
     int state = PARSE_HEADERS;
     size_t header_i = 0;
 
-    while (state != PARSE_BODY)
+    while (PARSE_HEADERS == state)
     {
         while (n_bytes = (read(connection_fd, read_point, buf_size) > 0))
         {
-            if (0 == FoundCRLF(buffer, total_read - crlf_index - 1, &crlf_index))
+            total_read = read_point + n_bytes - parse_portion;
+            if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
             {
                 buf_size -= n_bytes;
                 read_point += n_bytes;
@@ -184,17 +179,29 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
             break;
         }
 
+        // we found crlf, but it starts at the begining of the portion
+        // at least 2 bytes were read
         if (crlf_index == 0)
         {
-            return HTTP_BAD_REQUEST;
+            // if it was the first header
+            if (0 == header_i)
+            {
+                return HTTP_BAD_REQUEST;
+            }
+
+            // else, headers finished double crlf go now to parsing body
+            state = PARSE_BODY;
+
+            continue;
         }
-        ++header_i;
+
         if (HTTP_BAD_REQUEST == ParseHeaders(parse_portion, http_msg, crlf_index, header_i))
         {
             return HTTP_BAD_REQUEST;
         }
 
-        // next portion
+        ++header_i;
+
         parse_portion = parse_portion + crlf_index + 2;
         crlf_index = 0;
     }
@@ -224,12 +231,13 @@ int main(int argc, char **argv)
 
     char buffer[4 * KB] = {0};
     ssize_t bytes = 0;
+
+    http_request_t http_msg = {0};
+
     while (SERVER_RUNNING)
     {
 
         connection_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-
-        http_request_t http_msg = {0};
 
         memset(&http_msg, 0, sizeof(http_msg));
 

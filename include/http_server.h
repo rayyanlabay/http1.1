@@ -1,8 +1,6 @@
 #ifndef __HTTP_SERVER__H__
 #define __HTTP_SERVER__H__
 
-#include "pool_service.h"
-
 #define METHOD_IDX 0
 #define PATH_IDX 1
 #define PROTOCOL_IDX 2

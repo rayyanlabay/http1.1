@@ -35,6 +35,9 @@ example of an HTTP/1.1 Message Structure:
   </tr>
 </table>
 
+<br>
+![Diagram](./images/http_drawing_1.png)
+
 <!-- STATUS: 
 
 <table>

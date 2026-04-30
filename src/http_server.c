@@ -254,23 +254,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-static char *SubStr(const char *s, size_t i, size_t j)
-{
-    if (j < i)
-        return NULL;
-
-    size_t len = j - i; // [i, j)
-    char *out = malloc(len + 1);
-    if (!out)
-        return NULL;
-
-    memcpy(out, s + i, len);
-    out[len] = '\0';
-
-    return out;
-}
-
-static char *ProcessHttpRequest(http_request_t *http_msg, char *buffer)
+static char *ProcessHttpRequest(http_request_t *http_msg)
 {
     // test by printing the request
     printf("%.*s %.*s %.*s\n", http_msg->s[METHOD].size, http_msg->s[METHOD].data, http_msg->s[PATH].size,

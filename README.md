@@ -36,7 +36,7 @@ example of an HTTP/1.1 Message Structure:
 </table>
 
 <br>
-![Diagram](images/http_drawing_1.png)
+![Diagram](https://github.com/rayyanlabay/http1.1/blob/main/images/http_drawing_1.png)
 
 <!-- STATUS: 
 

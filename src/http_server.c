@@ -7,7 +7,6 @@
 #include "http_server.h"
 #include "utils.h"
 
-#define PORT 8080
 #define SERVER_RUNNING 1
 
 #define METHOD_STRING_START 0
@@ -15,25 +14,6 @@
 #define PROTOCOL_STRING_START 2
 
 #define KB 1024
-
-char *FindCRLF(ssize_t n_bytes, char *s)
-{
-    if (n_bytes < 2)
-    {
-        return NULL;
-    }
-
-    char *start = s;
-    while ((s - start) + 1 < n_bytes && !('\r' == s[0] && '\n' == s[1]))
-    {
-        ++s;
-    }
-
-    if ((s - start) + 1 >= n_bytes)
-        return NULL;
-
-    return s;
-}
 
 int FoundCRLF(char *buf, size_t n_bytes, size_t *current_location)
 {

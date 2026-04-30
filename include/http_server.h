@@ -34,8 +34,8 @@ typedef struct
 } slice_t;
 typedef struct
 {
-    slice_t *key;
-    slice_t *val;
+    slice_t key;
+    slice_t val;
 } header_t;
 
 // must change later to linked list style of fixed size arrays

@@ -66,8 +66,8 @@ int ParseHeaders(char *str, http_request_t *http_msg, size_t crlf_index, size_t 
 
     if (key_size > 0)
     {
-        http_msg->headers[header_i].key->size = key_size;
-        http_msg->headers[header_i].key->data = str;
+        http_msg->headers[header_i].key.size = key_size;
+        http_msg->headers[header_i].key.data = str;
     }
     else
     {
@@ -82,11 +82,13 @@ int ParseHeaders(char *str, http_request_t *http_msg, size_t crlf_index, size_t 
     ++s1;
     while (s1 < str + crlf_index && 0 != isspace(*(s1++)))
         ;
+    --s1;
 
     char *val_end = str + crlf_index - 1;
 
     while (val_end > s1 && 0 != isspace(*val_end--))
         ;
+    ++val_end;
 
     if (val_end < s1)
     {
@@ -96,8 +98,8 @@ int ParseHeaders(char *str, http_request_t *http_msg, size_t crlf_index, size_t 
     char *s2 = s1;
     size_t val_size = val_end - s2 + 1;
 
-    http_msg->headers[header_i].val->size = val_size;
-    http_msg->headers[header_i].val->data = s2;
+    http_msg->headers[header_i].val.size = val_size;
+    http_msg->headers[header_i].val.data = s2;
 
     return HTTP_OK;
 }
@@ -111,19 +113,21 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
 
     char *read_point = parse_portion;
 
-    size_t buf_size = sizeof(parse_portion);
+    size_t buf_size = 4 * KB;
 
     size_t total_read = 0;
 
     ssize_t n_bytes = 0;
 
-    while ((n_bytes = (read(connection_fd, read_point, buf_size) > 0)))
+    while ((n_bytes = read(connection_fd, read_point, buf_size)) > 0)
     {
         total_read = read_point + n_bytes - parse_portion;
+
+        buf_size -= n_bytes;
+        read_point += n_bytes;
+
         if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
         {
-            buf_size -= n_bytes;
-            read_point += n_bytes;
 
             continue;
         }
@@ -143,49 +147,48 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
     int state = PARSE_HEADERS;
     size_t header_i = 0;
 
+    n_bytes = 0;
+
     while (PARSE_HEADERS == state)
     {
-        while ((n_bytes = (read(connection_fd, read_point, buf_size) > 0)))
+        total_read = read_point + n_bytes - parse_portion;
+
+        // if crlf was found consume it before next read
+        while (0 != FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
         {
-            total_read = read_point + n_bytes - parse_portion;
-            if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
+            // we found crlf, but it starts at the begining of the portion
+            // at least 2 bytes were read
+            if (crlf_index == 0)
             {
-                buf_size -= n_bytes;
-                read_point += n_bytes;
+                // if it was the first header
+                if (0 == header_i)
+                {
+                    return HTTP_BAD_REQUEST;
+                }
+
+                // else, headers finished double crlf go now to parsing body
+                state = PARSE_BODY;
 
                 continue;
             }
 
-            break;
-        }
-
-        // we found crlf, but it starts at the begining of the portion
-        // at least 2 bytes were read
-        if (crlf_index == 0)
-        {
-            // if it was the first header
-            if (0 == header_i)
+            if (HTTP_BAD_REQUEST == ParseHeaders(parse_portion, http_msg, crlf_index, header_i))
             {
                 return HTTP_BAD_REQUEST;
             }
 
-            // else, headers finished double crlf go now to parsing body
-            state = PARSE_BODY;
+            ++header_i;
 
-            continue;
+            parse_portion = parse_portion + crlf_index + 2;
+            crlf_index = 0;
         }
 
-        if (HTTP_BAD_REQUEST == ParseHeaders(parse_portion, http_msg, crlf_index, header_i))
-        {
-            return HTTP_BAD_REQUEST;
-        }
+        // i am here
+        buf_size -= n_bytes;
+        read_point += n_bytes;
 
-        ++header_i;
-
-        parse_portion = parse_portion + crlf_index + 2;
-        crlf_index = 0;
+        n_bytes = read(connection_fd, read_point, buf_size);
     }
-
     return HTTP_OK;
 }
 
@@ -198,16 +201,16 @@ char *ProcessHttpRequest(http_request_t *http_msg)
     size_t i = 0;
     for (i = 0; i < MAXHEADER_NUM; ++i)
     {
-        if (http_msg->headers[i].key == NULL)
+        if (http_msg->headers[i].key.data == NULL)
         {
             break;
         }
 
         printf("%.*s: %.*s\n",
-               (int)http_msg->headers[i].key->size,
-               http_msg->headers[i].key->data,
-               (int)http_msg->headers[i].val->size,
-               http_msg->headers[i].val->data);
+               (int)http_msg->headers[i].key.size,
+               http_msg->headers[i].key.data,
+               (int)http_msg->headers[i].val.size,
+               http_msg->headers[i].val.data);
     }
 
     return NULL;

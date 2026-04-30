@@ -36,7 +36,7 @@ example of an HTTP/1.1 Message Structure:
 </table>
 
 STATUS: 
-
+<!-- 
 <table>
   <tr>
     <td>HTTP/1.1 parsing</td>
@@ -45,7 +45,7 @@ STATUS:
   <tr>
     <td>fast message allocation using memory pool</td>
     <td><img src="https://img.shields.io/badge/70%25-green"></td>
-  </tr>
+  </tr> -->
 
   <tr>
     <td> transition to C++ </td>

@@ -21,23 +21,32 @@ typedef enum
     HTTP_INTERNAL_SERVER_ERROR = 500
 } http_status_t;
 
-typedef struct
-{
-    char *key;
-    char *val;
-} http_header_entry_t;
-
 #define METHOD 0
 #define PATH 1
 #define PROTOCOL 2
 
+#define PARSE_FIRST_LINE 0
+#define PARSE_HEADERS 1
+#define PARSE_BODY 2
+
 typedef struct
 {
-    char *s[3];
+    char *data;
+    size_t size;
+} slice_t;
+typedef struct
+{
+    slice_t *key;
+    slice_t *val;
+} header_t;
 
-    http_header_entry_t *headers_start;
-    http_header_entry_t *headers_end;
-    // later change to grab from memory pool
+// must change later to linked list style of fixed size arrays
+#define MAXHEADER_NUM 128
+
+typedef struct
+{
+    slice_t s[3];
+    header_t headers[MAXHEADER_NUM];
     char *body;
 } http_request_t;
 

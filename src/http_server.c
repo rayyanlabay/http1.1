@@ -117,7 +117,7 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
 
     ssize_t n_bytes = 0;
 
-    while (n_bytes = (read(connection_fd, read_point, buf_size) > 0))
+    while ((n_bytes = (read(connection_fd, read_point, buf_size) > 0)))
     {
         total_read = read_point + n_bytes - parse_portion;
         if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
@@ -145,7 +145,7 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
 
     while (PARSE_HEADERS == state)
     {
-        while (n_bytes = (read(connection_fd, read_point, buf_size) > 0))
+        while ((n_bytes = (read(connection_fd, read_point, buf_size) > 0)))
         {
             total_read = read_point + n_bytes - parse_portion;
             if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
@@ -189,8 +189,35 @@ ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
     return HTTP_OK;
 }
 
+char *ProcessHttpRequest(http_request_t *http_msg)
+{
+    // test by printing the request
+    printf("%.*s %.*s %.*s\n", (int)http_msg->s[METHOD].size, http_msg->s[METHOD].data, (int)http_msg->s[PATH].size,
+           http_msg->s[PATH].data, (int)http_msg->s[PROTOCOL].size, http_msg->s[PROTOCOL].data);
+
+    size_t i = 0;
+    for (i = 0; i < MAXHEADER_NUM; ++i)
+    {
+        if (http_msg->headers[i].key == NULL)
+        {
+            break;
+        }
+
+        printf("%.*s: %.*s\n",
+               (int)http_msg->headers[i].key->size,
+               http_msg->headers[i].key->data,
+               (int)http_msg->headers[i].val->size,
+               http_msg->headers[i].val->data);
+    }
+
+    return NULL;
+}
+
+#define UNUSED(x) (void)x
+
 int main(int argc, char **argv)
 {
+    UNUSED(argc);
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     int port = atoi(argv[1]);
     struct sockaddr_in server_addr = {0};
@@ -210,7 +237,6 @@ int main(int argc, char **argv)
     socklen_t client_len = sizeof(client_addr);
 
     char buffer[4 * KB] = {0};
-    ssize_t bytes = 0;
 
     http_request_t http_msg = {0};
 
@@ -222,9 +248,17 @@ int main(int argc, char **argv)
         memset(&http_msg, 0, sizeof(http_msg));
 
         // misses body, only GET version
-        ParseHttp(connection_fd, buffer, &http_msg);
+        int r = 0;
 
-        size_t n_bytes = ProcessHttpRequest(&http_msg);
+        if (HTTP_OK != (r = ParseHttp(connection_fd, buffer, &http_msg)))
+        {
+            return r;
+        }
+
+        if (NULL == ProcessHttpRequest(&http_msg))
+        {
+            printf("BAD REQ");
+        }
 
         memset(buffer, 0, sizeof(buffer));
 
@@ -232,28 +266,4 @@ int main(int argc, char **argv)
     }
 
     return 0;
-}
-
-static char *ProcessHttpRequest(http_request_t *http_msg)
-{
-    // test by printing the request
-    printf("%.*s %.*s %.*s\n", http_msg->s[METHOD].size, http_msg->s[METHOD].data, http_msg->s[PATH].size,
-           http_msg->s[PATH].data, http_msg->s[PROTOCOL].size, http_msg->s[PROTOCOL].data);
-
-    size_t i = 0;
-    for (i = 0; i < MAXHEADER_NUM; ++i)
-    {
-        if (http_msg->headers[i].key == NULL)
-        {
-            break;
-        }
-
-        printf("%.*s: %.*s\n",
-               http_msg->headers[i].key->size,
-               http_msg->headers[i].key->data,
-               http_msg->headers[i].val->size,
-               http_msg->headers[i].val->data);
-    }
-
-    return NULL;
 }

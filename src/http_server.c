@@ -241,9 +241,10 @@ int main(int argc, char **argv)
 
         memset(&http_msg, 0, sizeof(http_msg));
 
+        // misses body, only GET version
         ParseHttp(connection_fd, buffer, &http_msg);
 
-        size_t n_bytes = PrintHttpRequest(&http_msg);
+        size_t n_bytes = ProcessHttpRequest(&http_msg);
 
         memset(buffer, 0, sizeof(buffer));
 
@@ -269,17 +270,25 @@ static char *SubStr(const char *s, size_t i, size_t j)
     return out;
 }
 
-static char *HttpRequestToString(http_request_t *http_msg, char *buffer)
+static char *ProcessHttpRequest(http_request_t *http_msg, char *buffer)
 {
+    // test by printing the request
+    printf("%.*s %.*s %.*s\n", http_msg->s[METHOD].size, http_msg->s[METHOD].data, http_msg->s[PATH].size,
+           http_msg->s[PATH].data, http_msg->s[PROTOCOL].size, http_msg->s[PROTOCOL].data);
+
     size_t i = 0;
     for (i = 0; i < MAXHEADER_NUM; ++i)
     {
-        sprintf(buffer,
-                "%.*s: %.*s",
-                http_msg->headers[i].key->size,
-                http_msg->headers[i].key->data,
-                http_msg->headers[i].val->size,
-                http_msg->headers[i].val->data);
+        if (http_msg->headers[i].key == NULL)
+        {
+            break;
+        }
+
+        printf("%.*s: %.*s\n",
+               http_msg->headers[i].key->size,
+               http_msg->headers[i].key->data,
+               http_msg->headers[i].val->size,
+               http_msg->headers[i].val->data);
     }
 
     return NULL;

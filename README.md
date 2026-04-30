@@ -13,21 +13,21 @@ example of an HTTP/1.1 Message Structure:
     <td>Method</td>
     <td>Path</td>
     <td>Protocol</td>
-    <td>CRLF</td>
+    <td>\r\n</td>
   </tr>
 
   <!-- Headers -->
   <tr>
     <td colspan="3">Content-Length</td>
-    <td>CRLF</td>
+    <td>\r\n</td>
   </tr>
   <tr>
     <td colspan="3">Connection</td>
-    <td>CRLF</td>
+    <td>\r\n</td>
   </tr>
   <tr>
     <td colspan="3"> ... </td>
-    <td>CRLF</td>
+    <td>\r\n\r\n</td>
   </tr>
 
   <!-- Body -->

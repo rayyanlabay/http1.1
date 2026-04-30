@@ -4,6 +4,7 @@
 ### this is a refresher project, exploring HTTP servers <br>
 
 starting from a simple HTTP/1.1 server until i expand into HTTP/3 over QUIC<br>
+among plans, to transition to C++ and use multithreading <br>
 example of an HTTP/1.1 Message Structure:
 
 <table>

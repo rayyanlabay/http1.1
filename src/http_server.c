@@ -12,65 +12,37 @@
 #define BUFSIZE 4 * KB
 #define SERVER_RUNNING 1
 
-int main(int argc, char **argv)
+size_t parse_u64_n(const char *s, size_t n)
 {
-    UNUSED(argc);
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    int port = atoi(argv[1]);
-    struct sockaddr_in server_addr = {0};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port);
+    size_t val = 0;
 
-    // bind server file descriptor to socket
-    bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
-
-    // SOMAXCONN is max connections allowed
-    listen(server_fd, SOMAXCONN);
-
-    // this will hold the connection
-    int connection_fd = 0;
-    struct sockaddr_in client_addr = {0};
-    socklen_t client_len = sizeof(client_addr);
-
-    char buffer[4 * KB] = {0};
-
-    http_request_t http_msg = {0};
-
-    while (SERVER_RUNNING)
+    for (size_t i = 0; i < n; i++)
     {
-
-        connection_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
-
-        memset(&http_msg, 0, sizeof(http_msg));
-
-        // misses body, only GET version
-        int r = 0;
-
-        if (HTTP_OK != (r = ParseHttpRequest(connection_fd, buffer, &http_msg)))
-        {
-            return r;
-        }
-
-        if (NULL == ProcessHttpRequest(&http_msg))
-        {
-            printf("BAD REQ");
-        }
-
-        memset(buffer, 0, sizeof(buffer));
-
-        close(connection_fd);
+        if (s[i] < '0' || s[i] > '9')
+            break;
+        val = val * 10 + (s[i] - '0');
     }
-
-    return 0;
+    return val;
 }
 
-http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *http_msg)
+int strncmp_lower(char *s1, char *s2, size_t n)
+{
+    while (n > 0 && *s1 && (tolower(*s1) == tolower(*s2)))
+    {
+        ++s1;
+        ++s2;
+        --n;
+    }
+
+    return (n == 0) ? 0 : (tolower(*s1) - tolower(*s2));
+}
+
+http_status_t parse_http_request(int connection_fd, char *buffer, http_request_t *http_msg)
 {
     size_t bytes_read = 0, crlf_start = 0;
     size_t window_start = 0, i = 0;
     size_t header_i = 0;
-    size_t stream_length = 1;
+    size_t stream_length = 0;
     size_t bytes_left_not_read = 0;
 
     char *content_length = NULL;
@@ -87,6 +59,27 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
         {
         case PARSE_FIRSTLINE_HEADERS:
         {
+            while (bytes_left_not_read--)
+            {
+                if (buffer[i] == '\r' && buffer[i + 1] == '\n')
+                {
+                    crlf_start = i;
+
+                    if (i < stream_length - 3 && (buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
+                    {
+                        i += 4;
+                        state = PARSE_BODY;
+                    }
+                    else
+                    {
+                        i += 2;
+                        state = first_line_read ? CONSUME_HEADER : CONSUME_FIRST_LINE;
+                    }
+                    break;
+                }
+                ++i;
+            }
+
             while (state == PARSE_FIRSTLINE_HEADERS &&
                    (bytes_read += read(connection_fd, buffer + stream_length, BUFSIZE - stream_length)) > 0)
             {
@@ -99,13 +92,16 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
                     {
                         crlf_start = i;
 
+                        bytes_left_not_read = stream_length - i - 2;
+
                         if (i < stream_length - 3 && (buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
                         {
-                            bytes_left_not_read = stream_length - i;
+                            i += 4;
                             state = PARSE_BODY;
                         }
                         else
                         {
+                            i += 2;
                             state = first_line_read ? CONSUME_HEADER : CONSUME_FIRST_LINE;
                         }
 
@@ -113,6 +109,7 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
                     }
                 }
             }
+            break;
         }
         case CONSUME_FIRST_LINE:
         {
@@ -136,6 +133,8 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
 
             first_line_read = 1;
             state = PARSE_FIRSTLINE_HEADERS;
+            window_start = crlf_start + 2;
+            break;
         }
 
         case CONSUME_HEADER:
@@ -200,6 +199,8 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
             ++header_i;
 
             state = PARSE_FIRSTLINE_HEADERS;
+            window_start = crlf_start + 2;
+            break;
         }
 
         case PARSE_BODY:
@@ -214,7 +215,7 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
 
             if (chunked)
             {
-                read_chunks_until_0();
+                // read_chunks_until_0();
             }
             else if (content_length)
             {
@@ -223,7 +224,7 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
 
                 // flush remaining bytes in stream, which are part of the body into file
                 // "processing the data"
-                if (write(file_fd, buffer + i, bytes_left_not_read) != 1)
+                if (fwrite(buffer + i, 1, bytes_left_not_read, file_fd) != 1)
                     return -1; // error
 
                 i += bytes_left_not_read;
@@ -234,7 +235,7 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
                 while ((processed_body + last_read < body_total) &&
                        (last_read += read(connection_fd, buffer + stream_length, BUFSIZE - stream_length)))
                 {
-                    write(file_fd, buffer + i, last_read);
+                    fwrite(buffer + i, 1, last_read, file_fd);
                     processed_body += last_read;
                     last_read = 0;
                 }
@@ -243,26 +244,56 @@ http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *
             //     body_length = 0;
             // else
             //     read_until_connection_close();
-        }
-        }
-    }
-}
-size_t parse_u64_n(const char *s, size_t n)
-{
-    size_t val = 0;
-
-    for (size_t i = 0; i < n; i++)
-    {
-        if (s[i] < '0' || s[i] > '9')
             break;
-        val = val * 10 + (s[i] - '0');
+        }
+        }
     }
-    return val;
 }
-int strncmp_lower(char *s1, char *s2, size_t n)
-{
-    while (n-- > 0 && *s1 && (tolower(*s1++) == tolower(*s2++)))
-        ;
 
-    return *s1 - *s2;
+int main(int argc, char **argv)
+{
+    UNUSED(argc);
+    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int port = atoi(argv[1]);
+    struct sockaddr_in server_addr = {0};
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(port);
+
+    // bind server file descriptor to socket
+    bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+
+    // SOMAXCONN is max connections allowed
+    listen(server_fd, SOMAXCONN);
+
+    // this will hold the connection
+    int connection_fd = 0;
+    struct sockaddr_in client_addr = {0};
+    socklen_t client_len = sizeof(client_addr);
+
+    char buffer[4 * KB] = {0};
+
+    http_request_t http_msg = {0};
+
+    while (SERVER_RUNNING)
+    {
+
+        connection_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+
+        memset(&http_msg, 0, sizeof(http_msg));
+
+        // misses body, only GET version
+        int r = 0;
+
+        if (HTTP_OK != (r = parse_http_request(connection_fd, buffer, &http_msg)))
+        {
+            return r;
+        }
+
+        memset(buffer, 0, sizeof(buffer));
+
+        close(connection_fd);
+    }
+
+    return 0;
 }

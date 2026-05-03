@@ -7,216 +7,10 @@
 #include "http_server.h"
 #include "utils.h"
 
-#define SERVER_RUNNING 1
-
-#define METHOD_STRING_START 0
-#define PATH_STRING_START 1
-#define PROTOCOL_STRING_START 2
-
-#define KB 1024
-
-int FoundCRLF(char *buf, size_t n_bytes, size_t *current_location)
-{
-    for (size_t i = 0; i < n_bytes - 1; ++i)
-    {
-        if (buf[*current_location] == '\r' && buf[*current_location + 1] == '\n')
-        {
-            return *current_location;
-        }
-        ++(*(current_location));
-    }
-
-    return 0;
-}
-
-int ParseFirstLine(char *str, http_request_t *http_msg, size_t crlf_index)
-{
-
-    char *s1 = NULL, *s2 = NULL, *s_end = str + crlf_index;
-    s1 = strchr(str, ' ');
-    s2 = s1 ? strchr(s1 + 1, ' ') : NULL;
-    if (!s1 || !s2)
-    {
-        return HTTP_BAD_REQUEST;
-    }
-
-    http_msg->s[METHOD].data = str;
-    http_msg->s[METHOD].size = s1 - str;
-
-    http_msg->s[PATH].data = s1 + 1;
-    http_msg->s[PATH].size = s2 - (s1 + 1);
-
-    http_msg->s[PROTOCOL].data = s2 + 1;
-    http_msg->s[PROTOCOL].size = s_end - (s2 + 1);
-
-    return HTTP_OK;
-}
-
-int ParseHeaders(char *str, http_request_t *http_msg, size_t crlf_index, size_t header_i)
-{
-
-    char *s1 = strchr(str, ':');
-
-    if (!s1)
-    {
-        return HTTP_BAD_REQUEST;
-    }
-
-    size_t key_size = s1 - str;
-
-    if (key_size > 0)
-    {
-        http_msg->headers[header_i].key.size = key_size;
-        http_msg->headers[header_i].key.data = str;
-    }
-    else
-    {
-        return HTTP_BAD_REQUEST;
-    }
-
-    if (0 == str + crlf_index - (s1 + 1))
-    {
-        return HTTP_BAD_REQUEST;
-    }
-
-    ++s1;
-    while (s1 < str + crlf_index && 0 != isspace(*(s1++)))
-        ;
-    --s1;
-
-    char *val_end = str + crlf_index - 1;
-
-    while (val_end > s1 && 0 != isspace(*val_end--))
-        ;
-    ++val_end;
-
-    if (val_end < s1)
-    {
-        return HTTP_BAD_REQUEST;
-    }
-
-    char *s2 = s1;
-    size_t val_size = val_end - s2 + 1;
-
-    http_msg->headers[header_i].val.size = val_size;
-    http_msg->headers[header_i].val.data = s2;
-
-    return HTTP_OK;
-}
-
-http_status_t
-ParseHttp(int connection_fd, char *buffer, http_request_t *http_msg)
-{
-    // crlf_index points at cr-lf in relation to parse_portion
-    size_t crlf_index = 0;
-    char *parse_portion = buffer;
-
-    char *read_point = parse_portion;
-
-    size_t buf_size = 4 * KB;
-
-    size_t total_read = 0;
-
-    ssize_t n_bytes = 0;
-
-    while ((n_bytes = read(connection_fd, read_point, buf_size)) > 0)
-    {
-        total_read = read_point + n_bytes - parse_portion;
-
-        buf_size -= n_bytes;
-        read_point += n_bytes;
-
-        if (0 == FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
-        {
-
-            continue;
-        }
-
-        break;
-    }
-
-    if (HTTP_BAD_REQUEST == ParseFirstLine(parse_portion, http_msg, crlf_index))
-    {
-        return HTTP_BAD_REQUEST;
-    }
-
-    // next portion
-    parse_portion = buffer + crlf_index + 2;
-    crlf_index = 0;
-
-    int state = PARSE_HEADERS;
-    size_t header_i = 0;
-
-    n_bytes = 0;
-
-    while (PARSE_HEADERS == state)
-    {
-        total_read = read_point + n_bytes - parse_portion;
-
-        // if crlf was found consume it before next read
-        while (0 != FoundCRLF(parse_portion, total_read - crlf_index, &crlf_index))
-        {
-            // we found crlf, but it starts at the begining of the portion
-            // at least 2 bytes were read
-            if (crlf_index == 0)
-            {
-                // if it was the first header
-                if (0 == header_i)
-                {
-                    return HTTP_BAD_REQUEST;
-                }
-
-                // else, headers finished double crlf go now to parsing body
-                state = PARSE_BODY;
-
-                continue;
-            }
-
-            if (HTTP_BAD_REQUEST == ParseHeaders(parse_portion, http_msg, crlf_index, header_i))
-            {
-                return HTTP_BAD_REQUEST;
-            }
-
-            ++header_i;
-
-            parse_portion = parse_portion + crlf_index + 2;
-            crlf_index = 0;
-        }
-
-        // i am here
-        buf_size -= n_bytes;
-        read_point += n_bytes;
-
-        n_bytes = read(connection_fd, read_point, buf_size);
-    }
-    return HTTP_OK;
-}
-
-char *ProcessHttpRequest(http_request_t *http_msg)
-{
-    // test by printing the request
-    printf("%.*s %.*s %.*s\n", (int)http_msg->s[METHOD].size, http_msg->s[METHOD].data, (int)http_msg->s[PATH].size,
-           http_msg->s[PATH].data, (int)http_msg->s[PROTOCOL].size, http_msg->s[PROTOCOL].data);
-
-    size_t i = 0;
-    for (i = 0; i < MAXHEADER_NUM; ++i)
-    {
-        if (http_msg->headers[i].key.data == NULL)
-        {
-            break;
-        }
-
-        printf("%.*s: %.*s\n",
-               (int)http_msg->headers[i].key.size,
-               http_msg->headers[i].key.data,
-               (int)http_msg->headers[i].val.size,
-               http_msg->headers[i].val.data);
-    }
-
-    return NULL;
-}
-
 #define UNUSED(x) (void)x
+#define KB 1024
+#define BUFSIZE 4 * KB
+#define SERVER_RUNNING 1
 
 int main(int argc, char **argv)
 {
@@ -253,7 +47,7 @@ int main(int argc, char **argv)
         // misses body, only GET version
         int r = 0;
 
-        if (HTTP_OK != (r = ParseHttp(connection_fd, buffer, &http_msg)))
+        if (HTTP_OK != (r = ParseHttpRequest(connection_fd, buffer, &http_msg)))
         {
             return r;
         }
@@ -269,4 +63,206 @@ int main(int argc, char **argv)
     }
 
     return 0;
+}
+
+http_status_t ParseHttpRequest(int connection_fd, char *buffer, http_request_t *http_msg)
+{
+    size_t bytes_read = 0, crlf_start = 0;
+    size_t window_start = 0, i = 0;
+    size_t header_i = 0;
+    size_t stream_length = 1;
+    size_t bytes_left_not_read = 0;
+
+    char *content_length = NULL;
+    size_t chunked = -1;
+
+    FILE *file_fd = 0;
+    file_fd = fopen("tmp", "rw+");
+
+    int first_line_read = 0;
+    int state = PARSE_FIRSTLINE_HEADERS;
+    while (SERVER_RUNNING)
+    {
+        switch (state)
+        {
+        case PARSE_FIRSTLINE_HEADERS:
+        {
+            while (state == PARSE_FIRSTLINE_HEADERS &&
+                   (bytes_read += read(connection_fd, buffer + stream_length, BUFSIZE - stream_length)) > 0)
+            {
+                stream_length += bytes_read;
+                bytes_read = 0;
+
+                for (; i < stream_length - 1; ++i)
+                {
+                    if (buffer[i] == '\r' && buffer[i + 1] == '\n')
+                    {
+                        crlf_start = i;
+
+                        if (i < stream_length - 3 && (buffer[i + 2] == '\r' && buffer[i + 3] == '\n'))
+                        {
+                            bytes_left_not_read = stream_length - i;
+                            state = PARSE_BODY;
+                        }
+                        else
+                        {
+                            state = first_line_read ? CONSUME_HEADER : CONSUME_FIRST_LINE;
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+        case CONSUME_FIRST_LINE:
+        {
+            char *str = buffer + window_start;
+            char *s1 = NULL, *s2 = NULL, *s_end = str + crlf_start;
+            s1 = strchr(str, ' ');
+            s2 = s1 ? strchr(s1 + 1, ' ') : NULL;
+            if (!s1 || !s2)
+            {
+                return HTTP_BAD_REQUEST;
+            }
+
+            http_msg->s[METHOD].data = str;
+            http_msg->s[METHOD].size = s1 - str;
+
+            http_msg->s[PATH].data = s1 + 1;
+            http_msg->s[PATH].size = s2 - (s1 + 1);
+
+            http_msg->s[PROTOCOL].data = s2 + 1;
+            http_msg->s[PROTOCOL].size = s_end - (s2 + 1);
+
+            first_line_read = 1;
+            state = PARSE_FIRSTLINE_HEADERS;
+        }
+
+        case CONSUME_HEADER:
+        {
+            char *str = buffer + window_start;
+            char *s1 = strchr(str, ':');
+
+            if (!s1)
+            {
+                return HTTP_BAD_REQUEST;
+            }
+
+            size_t key_size = s1 - str;
+
+            if (key_size > 0)
+            {
+                http_msg->headers[header_i].key.size = key_size;
+                http_msg->headers[header_i].key.data = str;
+            }
+            else
+            {
+                return HTTP_BAD_REQUEST;
+            }
+
+            if (0 == str + crlf_start - (s1 + 1))
+            {
+                return HTTP_BAD_REQUEST;
+            }
+
+            while (s1 < str + crlf_start && 0 != isspace(*(s1++)))
+                ;
+
+            char *val_end = str + crlf_start - 1;
+
+            while (val_end > s1 && 0 != isspace(*val_end--))
+                ;
+            ++val_end;
+
+            if (val_end < s1)
+            {
+                return HTTP_BAD_REQUEST;
+            }
+
+            char *s2 = s1;
+            size_t val_size = val_end - s2 + 1;
+
+            http_msg->headers[header_i].val.size = val_size;
+            http_msg->headers[header_i].val.data = s2;
+
+            char *header_key = http_msg->headers[header_i].key.data;
+            size_t header_size = http_msg->headers[header_i].key.size;
+
+            if (0 == strncmp_lower(header_key, "content-length", header_size))
+            {
+                content_length = http_msg->headers[header_i].val.data;
+            }
+            else if (0 == strncmp_lower(header_key, "transfer-encoding", header_size))
+            {
+                chunked = 1;
+            }
+
+            ++header_i;
+
+            state = PARSE_FIRSTLINE_HEADERS;
+        }
+
+        case PARSE_BODY:
+        {
+            char *method = http_msg->s[METHOD].data;
+            size_t method_size = http_msg->s[METHOD].size;
+
+            if (0 == strncmp_lower(method, "GET", method_size))
+            {
+                return HTTP_OK;
+            }
+
+            if (chunked)
+            {
+                read_chunks_until_0();
+            }
+            else if (content_length)
+            {
+                size_t sz = (size_t)(unsigned char)*(content_length - 1);
+                size_t body_total = parse_u64_n(content_length, sz);
+
+                // flush remaining bytes in stream, which are part of the body into file
+                // "processing the data"
+                if (write(file_fd, buffer + i, bytes_left_not_read) != 1)
+                    return -1; // error
+
+                i += bytes_left_not_read;
+                size_t processed_body = bytes_left_not_read;
+
+                size_t last_read = 0;
+                // read the rest
+                while ((processed_body + last_read < body_total) &&
+                       (last_read += read(connection_fd, buffer + stream_length, BUFSIZE - stream_length)))
+                {
+                    write(file_fd, buffer + i, last_read);
+                    processed_body += last_read;
+                    last_read = 0;
+                }
+            }
+            // else if (no_body_expected)
+            //     body_length = 0;
+            // else
+            //     read_until_connection_close();
+        }
+        }
+    }
+}
+size_t parse_u64_n(const char *s, size_t n)
+{
+    size_t val = 0;
+
+    for (size_t i = 0; i < n; i++)
+    {
+        if (s[i] < '0' || s[i] > '9')
+            break;
+        val = val * 10 + (s[i] - '0');
+    }
+    return val;
+}
+int strncmp_lower(char *s1, char *s2, size_t n)
+{
+    while (n-- > 0 && *s1 && (tolower(*s1++) == tolower(*s2++)))
+        ;
+
+    return *s1 - *s2;
 }

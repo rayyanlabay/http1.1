@@ -1,9 +1,22 @@
 #ifndef __HTTP_SERVER__H__
 #define __HTTP_SERVER__H__
 
-#define METHOD_IDX 0
-#define PATH_IDX 1
-#define PROTOCOL_IDX 2
+#define MAXHEADER_NUM 128
+
+#define METHOD 0
+#define PATH 1
+#define PROTOCOL 2
+
+typedef enum
+{
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS
+} http_method_t;
 
 typedef enum
 {
@@ -19,27 +32,27 @@ typedef enum
     HTTP_INTERNAL_SERVER_ERROR = 500
 } http_status_t;
 
-#define METHOD 0
-#define PATH 1
-#define PROTOCOL 2
+typedef enum
+{
+    PARSE_FIRSTLINE_HEADERS,
+    CONSUME_FIRST_LINE,
+    CONSUME_HEADER,
 
-#define PARSE_FIRST_LINE 0
-#define PARSE_HEADERS 1
-#define PARSE_BODY 2
+    PARSE_BODY,
+    CONSUME_BODY
+} state_machine_t;
 
 typedef struct
 {
     char *data;
     size_t size;
 } slice_t;
+
 typedef struct
 {
     slice_t key;
     slice_t val;
 } header_t;
-
-// must change later to linked list style of fixed size arrays
-#define MAXHEADER_NUM 128
 
 typedef struct
 {

@@ -1,6 +1,12 @@
 #ifndef __HTTP_SERVER__H__
 #define __HTTP_SERVER__H__
 
+#include "parser.h"
+
+#define KB 1024
+#define BUFSIZE 4 * KB
+#define SERVER_RUNNING 1
+
 #define MAXHEADER_NUM 128
 
 #define METHOD 0
